@@ -1,0 +1,182 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --color-brand-bg: #090909;
+  --color-brand-card: #0e0e0e;
+  --color-brand-cyan: #00A3C4;
+  --color-brand-orange: #EA580C;
+}
+
+body {
+  background-color: #090909;
+  color: #FAFAFA;
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+  letter-spacing: -0.01em;
+}
+
+/* Background Grid Overlay */
+.bg-grid {
+  background-size: 80px 80px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+}
+
+/* Glassmorphism Navigation Tab */
+.floating-tab {
+  background: rgba(13, 13, 13, 0.7);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+}
+
+/* Thin card structures */
+.kurate-card {
+  background: #0e0e0e;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.kurate-card-glow {
+  border: 1px solid rgba(0, 163, 196, 0.2);
+  box-shadow: 0 0 30px rgba(0, 163, 196, 0.05);
+}
+
+/* Custom glowing effects */
+.glow-spot-cyan {
+  filter: blur(140px);
+  background: radial-gradient(circle, rgba(0, 163, 196, 0.15) 0%, rgba(0, 163, 196, 0) 70%);
+}
+
+.glow-spot-orange {
+  filter: blur(140px);
+  background: radial-gradient(circle, rgba(234, 88, 12, 0.1) 0%, rgba(234, 88, 12, 0) 70%);
+}
+
+/* Parenthesized Metadata Text */
+.meta-label {
+  font-size: 11px;
+  color: #71717A; /* zinc-500 */
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+/* Lunar Status Visualizers */
+.lunar-moon-outer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.lunar-moon-base {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.1);
+  background: #060606;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.5s ease-in-out;
+}
+
+/* Lunar Phase Masks */
+
+/* 1. Active: Full Moon Glowing Cyan */
+.lunar-phase-active {
+  background: radial-gradient(circle at center, #00A3C4 0%, #083344 60%, #060606 100%);
+  border-color: rgba(0, 163, 196, 0.5);
+  box-shadow: 0 0 20px rgba(0, 163, 196, 0.3);
+}
+
+/* 2. Expiring: Gibbous (mostly lit, warm orange shade) */
+.lunar-phase-expiring {
+  background: #060606;
+  border-color: rgba(234, 88, 12, 0.4);
+}
+.lunar-phase-expiring::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: radial-gradient(circle at center, #ea580c 0%, #7c2d12 60%, transparent 100%);
+  clip-path: ellipse(48px 36px at 28px 36px); /* Waxing Gibbous shape */
+}
+
+/* 3. Stale: Half Moon (split vertically) */
+.lunar-phase-stale {
+  border-color: rgba(113, 113, 122, 0.4);
+}
+.lunar-phase-stale::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 100%;
+  background: radial-gradient(circle at 100% 50%, rgba(0, 163, 196, 0.6) 0%, #0f172a 70%, transparent 100%);
+}
+
+/* 4. Revoked: Crescent (thin line of cyan/gray) */
+.lunar-phase-revoked {
+  border-color: rgba(255, 255, 255, 0.05);
+}
+.lunar-phase-revoked::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 74px;
+  height: 74px;
+  border-radius: 50%;
+  box-shadow: -6px 0 0 0 rgba(250, 250, 250, 0.3) inset;
+}
+
+/* 5. Attacked: Dark with Red Ring of Fire */
+.lunar-phase-attacked {
+  border-color: rgba(239, 68, 68, 0.5);
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.2);
+  background: radial-gradient(circle at center, #ef4444 0%, #7f1d1d 30%, #060606 70%);
+}
+.lunar-phase-attacked::before {
+  content: '';
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  background: #090909;
+}
+
+/* Micro-animations and transitions */
+.hover-scale {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.hover-scale:hover {
+  transform: scale(1.02);
+}
+
+/* Standard thin line layout scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #090909;
+}
+::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
+}
