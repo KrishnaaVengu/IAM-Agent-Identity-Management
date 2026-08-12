@@ -1,0 +1,4 @@
+node_modules
+dist
+aim.db
+.env

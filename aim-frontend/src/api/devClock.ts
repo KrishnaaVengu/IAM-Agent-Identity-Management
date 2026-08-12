@@ -12,7 +12,7 @@ export const devClockApi = {
       newSimTime: string;
       autoRevokedAgentIds: string[];
     };
-  }> => client.post('/dev-clock/advance', { days }),
+  }> => client.post('/dev-clock/advance', { days, days_to_advance: days }),
 
   reset: (): Promise<{ data: { simNow: string } }> =>
     client.post('/dev-clock/reset'),

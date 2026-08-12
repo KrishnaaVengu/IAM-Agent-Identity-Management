@@ -16,7 +16,18 @@ export const simulatorApi = {
     agentId: string,
     endpointId: string
   ): Promise<{ data: SimulatorCallResult }> =>
-    client.post('/simulate-call', { agentId, endpointId }),
+    client.post('/simulator/execute', { agentId, endpointId }),
+
+  execute: (
+    token: string,
+    scopeRequired: string,
+    agentId?: string
+  ): Promise<{ data: SimulatorCallResult }> =>
+    client.post(
+      '/simulator/execute',
+      { token, scope_required: scopeRequired, agentId },
+      { headers: { Authorization: `Bearer ${token}` } }
+    ),
 
   listEndpoints: (): Promise<{ data: EndpointDefinition[] }> =>
     client.get('/simulate-call/endpoints'),

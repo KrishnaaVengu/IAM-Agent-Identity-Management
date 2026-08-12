@@ -143,11 +143,12 @@ export const SimClockWidget: React.FC = () => {
             <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1">
               <FastForward className="w-3.5 h-3.5 text-slate-400" /> Advance Time
             </label>
-            <div className="grid grid-cols-3 gap-1.5 mb-3">
+            <div className="grid grid-cols-2 gap-1.5 mb-3">
               {[
                 { label: '+1 day', days: 1, id: 'adv1' },
                 { label: '+7 days', days: 7, id: 'adv7' },
                 { label: '+30 days', days: 30, id: 'adv30' },
+                { label: '+35 days (Stale Test)', days: 35, id: 'adv35' },
               ].map(({ label, days, id }) => (
                 <button
                   key={id}
