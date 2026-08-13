@@ -1,15 +1,25 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { driver } from 'driver.js';
 import 'driver.js/dist/driver.css';
 
 export const GuidedTour: React.FC = () => {
   const [showPrompt, setShowPrompt] = useState(false);
+  const location = useLocation();
 
   useEffect(() => {
-    const isCompleted = localStorage.getItem('aim_tour_completed');
+    if (location.pathname !== '/dashboard') {
+      setShowPrompt(false);
+      return;
+    }
+
+    const isCompleted = sessionStorage.getItem('aim_tour_completed');
     if (!isCompleted) {
       setShowPrompt(true);
     }
+  }, [location.pathname]);
+
+  useEffect(() => {
 
     const startTourListener = () => {
       setShowPrompt(false);
@@ -21,12 +31,12 @@ export const GuidedTour: React.FC = () => {
   }, []);
 
   const handleSkip = () => {
-    localStorage.setItem('aim_tour_completed', 'true');
+    sessionStorage.setItem('aim_tour_completed', 'true');
     setShowPrompt(false);
   };
 
   const startTour = () => {
-    localStorage.setItem('aim_tour_completed', 'true');
+    sessionStorage.setItem('aim_tour_completed', 'true');
     setShowPrompt(false);
 
     const tourDriver = driver({
