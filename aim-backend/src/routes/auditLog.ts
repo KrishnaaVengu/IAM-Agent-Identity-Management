@@ -3,6 +3,36 @@ import db from '../db/connection.js';
 
 const router = Router();
 
+// GET /api/audit-log/export
+router.get('/export', (req, res) => {
+  const format = req.query.format || 'json';
+  const rows = db.prepare('SELECT * FROM audit_log ORDER BY timestamp DESC').all() as any[];
+
+  if (format === 'cef') {
+    const cefLines = rows.map((r) => 
+      `CEF:0|AIM|AgentIAM|1.0|${r.event_type}|Action Executed|5|src=${r.agent_id || 'system'} msg=${r.details.replace(/\|/g, '\\|')}`
+    );
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', 'attachment; filename="aim-audit-log.cef"');
+    return res.send(cefLines.join('\n'));
+  }
+
+  if (format === 'csv') {
+    const csvHeader = 'timestamp,event_type,agent_id,actor_role,details\n';
+    const csvLines = rows.map((r) => 
+      `"${r.timestamp}","${r.event_type}","${r.agent_id || ''}","${r.actor_role}","${r.details.replace(/"/g, '""')}"`
+    );
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="aim-audit-log.csv"');
+    return res.send(csvHeader + csvLines.join('\n'));
+  }
+
+  // JSON
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Disposition', 'attachment; filename="aim-audit-log.json"');
+  return res.json(rows);
+});
+
 // GET /api/audit-log
 router.get('/', (req, res) => {
   const { eventType, agentId, actorRole, from, to, page: rawPage, limit: rawLimit } = req.query;

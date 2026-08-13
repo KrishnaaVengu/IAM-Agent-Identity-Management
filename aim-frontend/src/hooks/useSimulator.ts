@@ -1,19 +1,24 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { simulatorApi } from '../api/simulator';
+import { queryClient } from '../queryClient';
 
 export const useSimulatorCall = () => {
-  return useMutation({
-    mutationFn: ({ agentId, endpointId }: { agentId: string; endpointId: string }) =>
-      simulatorApi.call(agentId, endpointId),
-  });
+ return useMutation({
+ mutationFn: ({ agentId, endpointId }: { agentId: string; endpointId: string }) =>
+ simulatorApi.call(agentId, endpointId),
+ onSettled: () => {
+   queryClient.invalidateQueries({ queryKey: ['agents'] });
+   queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+ },
+ });
 };
 
 export const useEndpointList = () => {
-  return useQuery({
-    queryKey: ['endpoints'],
-    queryFn: async () => {
-      const res = await simulatorApi.listEndpoints();
-      return (res.data as any)?.endpoints ?? res.data ?? [];
-    },
-  });
+ return useQuery({
+ queryKey: ['endpoints'],
+ queryFn: async () => {
+ const res = await simulatorApi.listEndpoints();
+ return (res.data as any)?.endpoints ?? res.data ?? [];
+ },
+ });
 };

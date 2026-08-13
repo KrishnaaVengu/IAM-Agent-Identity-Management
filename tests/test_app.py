@@ -88,7 +88,7 @@ def test_agent_registration_success():
     assert "credentialId" in credential
     assert "token" in res_data or "cleartextToken" in res_data or "fullToken" in credential
     token = res_data.get("token") or res_data.get("cleartextToken") or credential.get("fullToken")
-    assert token.startswith("sk_agt_") or token.startswith("aim_tok_")
+    assert token.startswith("sk_agt_") or token.startswith("aim_tok_") or token.startswith("eyJ")
 
 
 def test_agent_registration_duplicate_name_conflict():

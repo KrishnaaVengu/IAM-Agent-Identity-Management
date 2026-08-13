@@ -1,0 +1,17 @@
+{
+  "name": "agent-iam-root",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "npm --prefix aim-backend run dev",
+    "dev:frontend": "npm --prefix aim-frontend run dev",
+    "build": "npm --prefix aim-backend run build && npm --prefix aim-frontend run build",
+    "start": "npm run build && NODE_ENV=production npm --prefix aim-backend start",
+    "test": "python3 -m pytest -v tests/test_app.py"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

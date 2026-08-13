@@ -16,53 +16,66 @@ export function seedIfEmpty(): void {
   const daysAgo = (n: number) => new Date(nowMs - n * 86400000).toISOString();
   const daysFromNow = (n: number) => new Date(nowMs + n * 86400000).toISOString();
 
-  const agentsToSeed = [
-    {
-      agent_id: 'agt_support_reader_01',
-      name: 'support-ticket-reader',
-      purpose: 'Reads customer support tickets and order details automatically',
-      owning_team: 'Customer Support',
-      approved_scopes: ['read:tickets', 'read:orders'],
-      requested_lifetime_days: 30,
-      created_at: daysAgo(5),
-      expiry_date: daysFromNow(25),
-      last_api_call_at: daysAgo(1),
-      status: 'active',
-      registered_by: 'Admin',
-      credential_expires_at: daysFromNow(25),
-      credential_issued_at: daysAgo(5)
-    },
-    {
-      agent_id: 'agt_finance_refund_02',
-      name: 'finance-refund-bot',
-      purpose: 'Processes invoice checks and automated refund requests',
-      owning_team: 'Finance & Billing',
-      approved_scopes: ['read:invoices', 'write:refunds'],
-      requested_lifetime_days: 14,
-      created_at: daysAgo(2),
-      expiry_date: daysFromNow(12),
-      last_api_call_at: daysAgo(1),
-      status: 'active',
-      registered_by: 'Admin',
-      credential_expires_at: daysFromNow(12),
-      credential_issued_at: daysAgo(2)
-    },
-    {
-      agent_id: 'agt_devops_deploy_03',
-      name: 'devops-deploy-agent',
-      purpose: 'Monitors logs and executes deployment scripts on infrastructure',
-      owning_team: 'DevOps & Infrastructure',
-      approved_scopes: ['read:logs', 'write:deployments', 'admin:all'],
-      requested_lifetime_days: 7,
-      created_at: daysAgo(1),
-      expiry_date: daysFromNow(6),
-      last_api_call_at: daysAgo(1),
-      status: 'active',
-      registered_by: 'Admin',
-      credential_expires_at: daysFromNow(6),
-      credential_issued_at: daysAgo(1)
+  const teams = ['Data Eng', 'Finance-Automation', 'InfoSec', 'Infra', 'Ops', 'QA', 'SecOps'];
+  const possibleScopes = ['read:documents', 'write:databases', 'admin:billing', 'read:logs', 'execute:deployments', 'write:tickets', 'read:tickets'];
+  
+  const agentsToSeed: any[] = [];
+
+  // Helper to pick random item
+  const pickRandom = (arr: any[]) => arr[Math.floor(Math.random() * arr.length)];
+  const pickRandomScopes = () => {
+    const numScopes = Math.floor(Math.random() * 3) + 1;
+    const scopes = new Set<string>();
+    for (let i = 0; i < numScopes; i++) scopes.add(pickRandom(possibleScopes));
+    return Array.from(scopes);
+  };
+
+  for (let i = 1; i <= 35; i++) {
+    const team = pickRandom(teams);
+    let status = 'active';
+    let lastApiCallAt: string | null = daysAgo(Math.floor(Math.random() * 10)); // Recent call
+    let expiryDays = Math.floor(Math.random() * 80) + 10; // 10 to 90 days from now
+
+    // Force some suspended and decommissioned
+    if (i <= 3) status = 'suspended';
+    else if (i <= 5) status = 'decommissioned';
+
+    // Force some stale (Active but > 30 days no call)
+    if (i >= 6 && i <= 10) {
+      status = 'active';
+      lastApiCallAt = daysAgo(Math.floor(Math.random() * 20) + 35); // 35-55 days ago
     }
-  ];
+
+    // Force some expiring within 7 days
+    if (i >= 11 && i <= 14) {
+      status = 'active';
+      expiryDays = Math.floor(Math.random() * 6) + 1; // 1 to 6 days
+    }
+
+    // A few with never called
+    if (i === 15 || i === 16) {
+      lastApiCallAt = null;
+      // if created > 30 days ago, it will be stale
+    }
+
+    const createdDaysAgo = Math.floor(Math.random() * 100) + 40; // Created 40-140 days ago
+
+    agentsToSeed.push({
+      agent_id: `agt_bot_${i}_${nanoid(6)}`,
+      name: `${team.toLowerCase().replace(/[^a-z0-9]/g, '-')}-bot-${i}`,
+      purpose: `Automated tasks for ${team}`,
+      owning_team: team,
+      approved_scopes: pickRandomScopes(),
+      requested_lifetime_days: 90,
+      created_at: daysAgo(createdDaysAgo),
+      expiry_date: daysFromNow(expiryDays),
+      last_api_call_at: lastApiCallAt,
+      status: status,
+      registered_by: 'Admin',
+      credential_expires_at: daysFromNow(expiryDays),
+      credential_issued_at: daysAgo(createdDaysAgo - 10)
+    });
+  }
 
   const insertAgent = db.prepare(`
     INSERT INTO agents (
@@ -83,6 +96,12 @@ export function seedIfEmpty(): void {
     INSERT INTO audit_log (
       id, timestamp, event_type, action, agent_id, actor_role, details
     ) VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const insertApiLog = db.prepare(`
+    INSERT INTO api_call_log (
+      id, agent_id, credential_id, timestamp, endpoint, required_scope, result, reason_code
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const seedTransaction = db.transaction(() => {
@@ -121,9 +140,9 @@ export function seedIfEmpty(): void {
         agent.credential_issued_at,
         agent.credential_issued_at,
         agent.credential_expires_at,
-        'active',
-        null,
-        null
+        agent.status === 'active' ? 'active' : 'revoked',
+        agent.status !== 'active' ? agent.last_api_call_at || daysAgo(1) : null,
+        agent.status !== 'active' ? 'status_change' : null
       );
 
       insertAuditLog.run(
@@ -145,6 +164,20 @@ export function seedIfEmpty(): void {
         'System',
         `Seed credential issued: ${credId}`
       );
+      
+      // If there's a last API call, let's insert a log for it so the dashboard has API logs
+      if (agent.last_api_call_at) {
+        insertApiLog.run(
+          'log_' + nanoid(12),
+          agent.agent_id,
+          credId,
+          agent.last_api_call_at,
+          'simulated_endpoint',
+          agent.approved_scopes[0] || 'read:documents',
+          'ALLOWED',
+          'OK'
+        );
+      }
     }
   });
 

@@ -73,6 +73,16 @@ export function runMigrations(): void {
       sim_offset_ms INTEGER NOT NULL DEFAULT 0
     );
 
+    CREATE TABLE IF NOT EXISTS scope_requests (
+      request_id TEXT PRIMARY KEY,
+      agent_id TEXT NOT NULL,
+      requested_scope TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      requested_at TEXT NOT NULL,
+      resolved_at TEXT,
+      FOREIGN KEY (agent_id) REFERENCES agents(agent_id)
+    );
+
     INSERT OR IGNORE INTO sim_clock (id, sim_offset_ms) VALUES (1, 0);
   `);
 

@@ -38,13 +38,16 @@ router.get('/stats', (req, res) => {
   const sensitiveScopeUnreviewedIds: string[] = [];
 
   for (const agent of activeAgentRows) {
-    const isStale = !agent.last_api_call_at || agent.last_api_call_at <= thirtyDaysAgo;
+    const isStale = agent.last_api_call_at
+      ? agent.last_api_call_at <= thirtyDaysAgo
+      : agent.created_at <= thirtyDaysAgo;
+
     if (isStale) {
       staleCount++;
       staleIds.push(agent.agent_id);
     }
 
-    if (agent.expiry_date <= sevenDaysFromNow) {
+    if (agent.expiry_date <= sevenDaysFromNow && agent.expiry_date >= simNow) {
       expiring7Count++;
       expiringSoonIds.push(agent.agent_id);
     }

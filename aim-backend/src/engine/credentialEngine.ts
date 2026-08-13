@@ -1,8 +1,11 @@
 import crypto from 'node:crypto';
 import { nanoid } from 'nanoid';
+import jwt from 'jsonwebtoken';
 import db from '../db/connection.js';
 import { getSimNow } from './clockEngine.js';
 import { Credential } from '../models/credential.js';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-aim-platform';
 
 function addDays(isoDate: string, days: number): string {
   return new Date(new Date(isoDate).getTime() + days * 86400000).toISOString();
@@ -13,11 +16,27 @@ export function generateCredential(
   lifetimeDays: number,
   scopes: string[]
 ): Credential {
-  const token = 'sk_agt_' + crypto.randomBytes(16).toString('hex');
-  const tokenPreview = 'sk_agt_••••••••' + token.slice(-4);
   const credentialId = 'cred_' + nanoid(12);
   const issuedAt = getSimNow();
   const expiresAt = addDays(issuedAt, lifetimeDays);
+  
+  // OIDC standard claims
+  const token = jwt.sign(
+    {
+      sub: agentId,
+      jti: credentialId,
+      scopes: scopes
+    },
+    JWT_SECRET,
+    { expiresIn: `${lifetimeDays}d` }
+  );
+
+  // Still provide a neat preview for the UI
+  const parts = token.split('.');
+  const tokenPreview = parts.length === 3 
+    ? `jwt_...${parts[2].slice(-8)}`
+    : `sk_agt_••••••••${token.slice(-4)}`;
+
   const status = 'active';
 
   db.prepare(`

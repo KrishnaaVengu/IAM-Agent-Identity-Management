@@ -208,6 +208,63 @@ router.post('/', requirePermission('register'), handleRegister);
 // POST /agents/register or /register
 router.post('/register', requirePermission('register'), handleRegister);
 
+// GET /agents/scope-requests/pending
+router.get('/scope-requests/pending', requirePermission('read'), (req, res) => {
+  const rows = db.prepare('SELECT sr.*, a.name as agent_name FROM scope_requests sr JOIN agents a ON sr.agent_id = a.agent_id WHERE sr.status = ? ORDER BY sr.requested_at ASC').all('pending');
+  res.json({ ok: true, data: rows });
+});
+
+// POST /agents/scope-requests/:requestId/approve
+router.post('/scope-requests/:requestId/approve', requirePermission('update'), (req, res) => {
+  const reqRow = db.prepare('SELECT * FROM scope_requests WHERE request_id = ?').get(req.params.requestId) as any;
+  if (!reqRow || reqRow.status !== 'pending') return res.status(404).json({ ok: false, error: { message: 'Pending request not found' } });
+  
+  const agent = db.prepare('SELECT * FROM agents WHERE agent_id = ?').get(reqRow.agent_id) as any;
+  if (!agent) return res.status(404).json({ ok: false, error: { message: 'Agent not found' } });
+
+  const simNow = getSimNow();
+  db.prepare(`UPDATE scope_requests SET status = 'approved', resolved_at = ? WHERE request_id = ?`).run(simNow, reqRow.request_id);
+  
+  const currentScopes = agent.approved_scopes ? JSON.parse(agent.approved_scopes) : [];
+  if (!currentScopes.includes(reqRow.requested_scope)) {
+    currentScopes.push(reqRow.requested_scope);
+  }
+  db.prepare(`UPDATE agents SET approved_scopes = ?, requested_scopes = ? WHERE agent_id = ?`).run(JSON.stringify(currentScopes), JSON.stringify(currentScopes), agent.agent_id);
+
+  if (agent.current_credential_id) {
+    revokeCredential(agent.current_credential_id, 'rotated');
+  }
+  const cred = generateCredential(agent.agent_id, agent.requested_lifetime_days || 30, currentScopes);
+  db.prepare('UPDATE agents SET current_credential_id = ? WHERE agent_id = ?').run(cred.credentialId, agent.agent_id);
+
+  writeAuditLog({
+    eventType: 'CREDENTIAL_ROTATED',
+    agentId: agent.agent_id,
+    actorRole: 'Admin',
+    details: `Approved scope request for '${reqRow.requested_scope}' and minted new JWT.`
+  });
+
+  res.json({ ok: true, data: { token: cred.fullToken, scopes: currentScopes } });
+});
+
+// POST /agents/scope-requests/:requestId/reject
+router.post('/scope-requests/:requestId/reject', requirePermission('update'), (req, res) => {
+  const reqRow = db.prepare('SELECT * FROM scope_requests WHERE request_id = ?').get(req.params.requestId) as any;
+  if (!reqRow || reqRow.status !== 'pending') return res.status(404).json({ ok: false, error: { message: 'Pending request not found' } });
+
+  const simNow = getSimNow();
+  db.prepare(`UPDATE scope_requests SET status = 'rejected', resolved_at = ? WHERE request_id = ?`).run(simNow, reqRow.request_id);
+  
+  writeAuditLog({
+    eventType: 'REVIEW_RUN',
+    agentId: reqRow.agent_id,
+    actorRole: 'Admin',
+    details: `Rejected scope request for '${reqRow.requested_scope}'`
+  });
+
+  res.json({ ok: true });
+});
+
 // GET /agents/:id
 router.get('/:id', (req, res) => {
   const row = db.prepare('SELECT * FROM agents WHERE agent_id = ? OR id = ?').get(req.params.id, req.params.id);
@@ -217,6 +274,22 @@ router.get('/:id', (req, res) => {
   }
 
   res.json({ ok: true, data: { agent: formatAgent(row) } });
+});
+
+// POST /agents/:id/request-scope
+router.post('/:id/request-scope', requirePermission('update'), (req, res) => {
+  const agent = db.prepare('SELECT * FROM agents WHERE agent_id = ? OR id = ?').get(req.params.id, req.params.id) as any;
+  if (!agent) return res.status(404).json({ ok: false, error: { message: 'Agent not found' } });
+  
+  const scope = req.body.scope;
+  if (!scope) return res.status(400).json({ ok: false, error: { message: 'Scope is required' } });
+
+  const requestId = 'req_' + nanoid(10);
+  const simNow = getSimNow();
+  
+  db.prepare(`INSERT INTO scope_requests (request_id, agent_id, requested_scope, status, requested_at) VALUES (?, ?, ?, 'pending', ?)`).run(requestId, agent.agent_id, scope, simNow);
+  
+  res.status(201).json({ ok: true, data: { requestId, status: 'pending' } });
 });
 
 // POST /agents/:id/suspend

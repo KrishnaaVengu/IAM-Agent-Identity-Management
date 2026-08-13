@@ -1,9 +1,24 @@
 import { Router } from 'express';
 import { nanoid } from 'nanoid';
+import jwt from 'jsonwebtoken';
 import db from '../db/connection.js';
 import { getSimNow } from '../engine/clockEngine.js';
 import { ENDPOINT_CATALOG } from '../models/scopeCatalog.js';
 import { writeAuditLog } from '../engine/expiryEngine.js';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-aim-platform';
+
+const strikeTracker = new Map<string, { strikes: number, firstStrike: number }>();
+
+// Clean up tracker to prevent memory leaks
+setInterval(() => {
+  const now = Date.now();
+  for (const [agentId, tracker] of strikeTracker.entries()) {
+    if (now - tracker.firstStrike > 10000) {
+      strikeTracker.delete(agentId);
+    }
+  }
+}, 30000);
 
 const router = Router();
 
@@ -33,9 +48,23 @@ function handleExecute(req: any, res: any) {
   let agent: any = null;
 
   if (token) {
-    credential = db.prepare('SELECT * FROM credentials WHERE full_token = ? OR credential_id = ? OR id = ? OR token_preview LIKE ?').get(
-      token, token, token, `%${token.slice(-4)}`
-    );
+    // Check if token is a JWT
+    if (token.startsWith('ey')) {
+      try {
+        const decoded = jwt.verify(token, JWT_SECRET) as any;
+        const jti = decoded.jti; // credentialId
+        credential = db.prepare('SELECT * FROM credentials WHERE credential_id = ?').get(jti);
+      } catch (err: any) {
+        // Fallback to searching db by full_token just in case it's an old token
+        credential = db.prepare('SELECT * FROM credentials WHERE full_token = ? OR credential_id = ? OR id = ? OR token_preview LIKE ?').get(
+          token, token, token, `%${token.slice(-4)}`
+        );
+      }
+    } else {
+      credential = db.prepare('SELECT * FROM credentials WHERE full_token = ? OR credential_id = ? OR id = ? OR token_preview LIKE ?').get(
+        token, token, token, `%${token.slice(-4)}`
+      );
+    }
   }
 
   if (credential) {
@@ -155,6 +184,48 @@ function handleExecute(req: any, res: any) {
   const grantedScopes: string[] = credential.scopes ? JSON.parse(credential.scopes) : (agent.approved_scopes ? JSON.parse(agent.approved_scopes) : []);
 
   if (requiredScope && !grantedScopes.includes(requiredScope) && !grantedScopes.includes('admin:all')) {
+    const nowReal = Date.now();
+    let tracker = strikeTracker.get(agent.agent_id) || { strikes: 0, firstStrike: nowReal };
+    
+    if (nowReal - tracker.firstStrike > 10000) {
+      tracker = { strikes: 0, firstStrike: nowReal };
+    }
+    
+    tracker.strikes += 1;
+    strikeTracker.set(agent.agent_id, tracker);
+
+    if (tracker.strikes >= 5) {
+      // Trigger Lockdown
+      db.prepare("UPDATE agents SET status = 'suspended' WHERE agent_id = ?").run(agent.agent_id);
+      db.prepare("UPDATE credentials SET status = 'revoked', revoked_at = ?, revoked_reason = 'security_lockdown' WHERE credential_id = ?").run(simNow, credential.credential_id);
+      
+      writeAuditLog({
+        eventType: 'AGENT_SUSPENDED',
+        agentId: agent.agent_id,
+        actorRole: 'System',
+        details: 'Multiple unauthorized access attempts detected. Agent automatically suspended and credentials revoked.'
+      });
+
+      db.prepare(`
+        INSERT INTO api_call_log (
+          id, agent_id, credential_id, timestamp, endpoint, required_scope, result, reason_code
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(logId, agent.agent_id, credential.credential_id, simNow, endpointLabel, requiredScope, 'DENIED', 'SECURITY_LOCKDOWN');
+
+      strikeTracker.delete(agent.agent_id);
+
+      res.status(423).json({
+        ok: false,
+        statusCode: 423,
+        result: 'DENIED',
+        reasonCode: 'SECURITY_LOCKDOWN',
+        message: 'SECURITY LOCKDOWN: Anomaly detected. Agent suspended and credentials revoked.',
+        endpoint: endpointLabel,
+        requiredScope
+      });
+      return;
+    }
+
     const msg = `Agent '${agent.name}' lacks scope '${requiredScope}'. Granted scopes: [${grantedScopes.join(', ')}]`;
     db.prepare(`
       INSERT INTO api_call_log (
